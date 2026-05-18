@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VideoVault — Download Anything</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080a0f;
+    --surface: #0d111a;
+    --card: #111622;
+    --border: rgba(255,255,255,0.07);
+    --accent: #00e5ff;
+    --accent2: #ff3cac;
+    --accent3: #7b2ff7;
+    --text: #e8edf5;
+    --muted: #5a6a82;
+    --glow: 0 0 40px rgba(0,229,255,0.15);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    cursor: none;
+  }
+
+  /* Custom cursor */
+  .cursor {
+    position: fixed;
+    width: 12px; height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    transition: transform 0.15s ease, background 0.2s;
+    mix-blend-mode: screen;
+  }
+  .cursor-ring {
+    position: fixed;
+    width: 36px; height: 36px;
+    border: 1.5px solid rgba(0,229,255,0.5);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9998;
+    transition: transform 0.35s cubic-bezier(0.25,0.46,0.45,0.94), opacity 0.2s;
+  }
+  .cursor.hover { transform: scale(2.5); background: var(--accent2); }
+  .cursor-ring.hover { transform: scale(1.8); opacity: 0.3; }
+
+  /* Animated background */
+  .bg-canvas {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .bg-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.18;
+    animation: orbFloat 12s ease-in-out infinite;
+  }
+  .bg-orb:nth-child(1) {
+    width: 600px; height: 600px;
+    background: var(--accent3);
+    top: -200px; left: -100px;
+    animation-delay: 0s;
+  }
+  .bg-orb:nth-child(2) {
+    width: 500px; height: 500px;
+    background: var(--accent);
+    top: 30%; right: -150px;
+    animation-delay: -4s;
+  }
+  .bg-orb:nth-child(3) {
+    width: 400px; height: 400px;
+    background: var(--accent2);
+    bottom: -100px; left: 30%;
+    animation-delay: -8s;
+  }
+
+  @keyframes orbFloat {
+    0%, 100% { transform: translateY(0) scale(1); }
+    33% { transform: translateY(-40px) scale(1.05); }
+    66% { transform: translateY(30px) scale(0.97); }
+  }
+
+  /* Grid overlay */
+  .grid-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%);
+  }
+
+  /* Noise texture */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 128px;
+  }
+
+  /* Header */
+  header {
+    position: relative; z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px 60px;
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    background: rgba(8,10,15,0.6);
+    position: fixed; top: 0; left: 0; right: 0;
+    animation: slideDown 0.8s cubic-bezier(0.16,1,0.3,1) forwards;
+  }
+  @keyframes slideDown {
+    from { transform: translateY(-100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .logo {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 0 20px rgba(0,229,255,0.3);
+    animation: logoPulse 3s ease-in-out infinite;
+  }
+  @keyframes logoPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(0,229,255,0.3); }
+    50% { box-shadow: 0 0 35px rgba(0,229,255,0.6); }
+  }
+  .logo span { color: var(--accent); }
+
+  nav { display: flex; gap: 36px; align-items: center; }
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: color 0.25s;
+    position: relative;
+  }
+  nav a::after {
+    content: '';
+    position: absolute;
+    bottom: -4px; left: 0; right: 100%;
+    height: 1px;
+    background: var(--accent);
+    transition: right 0.3s cubic-bezier(0.25,0.46,0.45,0.94);
+  }
+  nav a:hover { color: var(--text); }
+  nav a:hover::after { right: 0; }
+
+  .nav-badge {
+    background: linear-gradient(135deg, var(--accent3), var(--accent2));
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+    letter-spacing: 1px;
+  }
+
+  /* Main content */
+  main {
+    position: relative;
+    z-index: 5;
+    padding-top: 140px;
+  }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 80px 20px 60px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0,229,255,0.08);
+    border: 1px solid rgba(0,229,255,0.2);
+    border-radius: 30px;
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+    animation: fadeUp 0.8s 0.2s both;
+  }
+  .hero-badge .dot {
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: blink 1.5s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  .hero h1 {
+    font-size: clamp(48px, 8vw, 90px);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -3px;
+    margin-bottom: 24px;
+    animation: fadeUp 0.8s 0.35s both;
+  }
+  .hero h1 .line2 {
+    display: block;
+    background: linear-gradient(135deg, var(--accent), var(--accent3), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero p {
+    font-size: 17px;
+    color: var(--muted);
+    max-width: 520px;
+    margin: 0 auto 50px;
+    line-height: 1.7;
+    font-family: 'DM Mono', monospace;
+    font-weight: 300;
+    animation: fadeUp 0.8s 0.5s both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Input section */
+  .input-container {
+    max-width: 720px;
+    margin: 0 auto 60px;
+    animation: fadeUp 0.8s 0.65s both;
+  }
+
+  .platform-tabs {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .platform-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    border-radius: 30px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: none;
+    transition: all 0.25s ease;
+    font-family: 'Syne', sans-serif;
+  }
+  .platform-tab .icon { font-size: 15px; }
+  .platform-tab:hover, .platform-tab.active {
+    border-color: var(--accent);
+    color: var(--text);
+    background: rgba(0,229,255,0.06);
+    box-shadow: 0 0 20px rgba(0,229,255,0.1);
+  }
+  .platform-tab.yt:hover, .platform-tab.yt.active { border-color: #ff4444; color: #ff4444; background: rgba(255,68,68,0.06); box-shadow: 0 0 20px rgba(255,68,68,0.1); }
+  .platform-tab.tt:hover, .platform-tab.tt.active { border-color: #00f2ea; color: #00f2ea; background: rgba(0,242,234,0.06); box-shadow: 0 0 20px rgba(0,242,234,0.1); }
+  .platform-tab.ig:hover, .platform-tab.ig.active { border-color: #e1306c; color: #e1306c; background: rgba(225,48,108,0.06); box-shadow: 0 0 20px rgba(225,48,108,0.1); }
+  .platform-tab.tw:hover, .platform-tab.tw.active { border-color: #1da1f2; color: #1da1f2; background: rgba(29,161,242,0.06); box-shadow: 0 0 20px rgba(29,161,242,0.1); }
+  .platform-tab.fb:hover, .platform-tab.fb.active { border-color: #4267B2; color: #4267B2; background: rgba(66,103,178,0.06); box-shadow: 0 0 20px rgba(66,103,178,0.1); }
+
+  .search-box {
+    display: flex;
+    gap: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 6px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .search-box::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(0,229,255,0.03), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .search-box:focus-within {
+    border-color: rgba(0,229,255,0.4);
+    box-shadow: 0 0 0 1px rgba(0,229,255,0.15), 0 8px 40px rgba(0,229,255,0.08);
+  }
+  .search-box:focus-within::before { opacity: 1; }
+
+  .url-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-size: 15px;
+    font-family: 'DM Mono', monospace;
+    padding: 16px 20px;
+    min-width: 0;
+  }
+  .url-input::placeholder { color: var(--muted); }
+
+  .paste-btn {
+    background: rgba(255,255,255,0.05);
+    border: none;
+    border-radius: 10px;
+    color: var(--muted);
+    padding: 10px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: none;
+    font-family: 'Syne', sans-serif;
+    letter-spacing: 0.5px;
+    transition: all 0.2s;
+    align-self: center;
+    white-space: nowrap;
+  }
+  .paste-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+
+  .download-btn {
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    border: none;
+    border-radius: 10px;
+    color: #080a0f;
+    padding: 14px 28px;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: none;
+    font-family: 'Syne', sans-serif;
+    letter-spacing: 0.5px;
+    transition: all 0.25s ease;
+    white-space: nowrap;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .download-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .download-btn:hover { transform: scale(1.03); box-shadow: 0 8px 30px rgba(0,229,255,0.4); }
+  .download-btn:hover::after { opacity: 0.1; }
+  .download-btn:active { transform: scale(0.98); }
+
+  .btn-spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(0,0,0,0.3);
+    border-top-color: #080a0f;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .download-btn.loading .btn-text { display: none; }
+  .download-btn.loading .btn-spinner { display: block; }
+  .download-btn.loading .btn-icon { display: none; }
+
+  /* Quality selector */
+  .quality-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 14px;
+    padding: 0 8px;
+    flex-wrap: wrap;
+  }
+  .quality-label {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+  }
+  .quality-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .quality-pill {
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: none;
+    font-family: 'DM Mono', monospace;
+    transition: all 0.2s;
+  }
+  .quality-pill:hover { border-color: var(--accent); color: var(--accent); }
+  .quality-pill.active { background: var(--accent); border-color: var(--accent); color: #080a0f; }
+
+  .format-select {
+    margin-left: auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    padding: 5px 12px;
+    cursor: none;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .format-select:hover { border-color: var(--accent); }
+
+  /* Result card */
+  .result-card {
+    max-width: 720px;
+    margin: 0 auto 40px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 24px;
+    display: none;
+    animation: fadeUp 0.5s ease forwards;
+    position: relative;
+    overflow: hidden;
+  }
+  .result-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent3), var(--accent2));
+  }
+  .result-card.show { display: block; }
+
+  .result-inner {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .result-thumb {
+    width: 140px;
+    height: 90px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--surface), var(--card));
+    flex-shrink: 0;
+    overflow: hidden;
+    position: relative;
+  }
+  .result-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+  }
+  .thumb-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+  }
+  .result-info { flex: 1; min-width: 0; }
+  .result-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .result-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .result-meta span { display: flex; align-items: center; gap: 4px; }
+
+  .download-options {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .dl-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: none;
+    font-family: 'Syne', sans-serif;
+    transition: all 0.2s;
+    text-decoration: none;
+  }
+  .dl-option:hover {
+    border-color: var(--accent);
+    background: rgba(0,229,255,0.06);
+    color: var(--accent);
+    box-shadow: 0 4px 20px rgba(0,229,255,0.1);
+  }
+  .dl-option .res { font-size: 10px; color: var(--muted); }
+
+  /* Progress bar */
+  .progress-wrap {
+    max-width: 720px;
+    margin: 0 auto 20px;
+    display: none;
+    animation: fadeUp 0.4s ease;
+  }
+  .progress-wrap.show { display: block; }
+  .progress-bar-outer {
+    height: 3px;
+    background: var(--surface);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .progress-bar-inner {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent3));
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.3s ease;
+    position: relative;
+  }
+  .progress-bar-inner::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 60px; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6));
+    animation: shimmer 1s ease-in-out infinite;
+  }
+  @keyframes shimmer {
+    0% { opacity: 0; }
+    50% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .progress-text {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    margin-top: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* Error */
+  .error-msg {
+    max-width: 720px;
+    margin: 0 auto 20px;
+    background: rgba(255,60,60,0.06);
+    border: 1px solid rgba(255,60,60,0.2);
+    border-radius: 12px;
+    padding: 14px 20px;
+    font-size: 13px;
+    color: #ff6b6b;
+    font-family: 'DM Mono', monospace;
+    display: none;
+    animation: fadeUp 0.3s ease;
+  }
+  .error-msg.show { display: flex; align-items: center; gap: 10px; }
+
+  /* Stats section */
+  .stats {
+    max-width: 900px;
+    margin: 20px auto 80px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    animation: fadeUp 0.8s 0.8s both;
+  }
+  .stat-item {
+    background: var(--card);
+    padding: 32px;
+    text-align: center;
+    transition: background 0.3s;
+  }
+  .stat-item:hover { background: var(--surface); }
+  .stat-num {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .stat-label { font-size: 12px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+  /* Platform showcase */
+  .platforms-section {
+    max-width: 900px;
+    margin: 0 auto 80px;
+    animation: fadeUp 0.8s 1s both;
+  }
+  .section-label {
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-family: 'DM Mono', monospace;
+    margin-bottom: 32px;
+  }
+
+  .platforms-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+  }
+  .platform-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 16px;
+    text-align: center;
+    transition: all 0.35s cubic-bezier(0.25,0.46,0.45,0.94);
+    cursor: none;
+    position: relative;
+    overflow: hidden;
+  }
+  .platform-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .platform-card.yt-card::before { background: radial-gradient(circle at 50% 0%, rgba(255,68,68,0.12), transparent 70%); }
+  .platform-card.tt-card::before { background: radial-gradient(circle at 50% 0%, rgba(0,242,234,0.1), transparent 70%); }
+  .platform-card.ig-card::before { background: radial-gradient(circle at 50% 0%, rgba(225,48,108,0.1), transparent 70%); }
+  .platform-card.tw-card::before { background: radial-gradient(circle at 50% 0%, rgba(29,161,242,0.1), transparent 70%); }
+  .platform-card.fb-card::before { background: radial-gradient(circle at 50% 0%, rgba(66,103,178,0.1), transparent 70%); }
+  .platform-card:hover::before { opacity: 1; }
+  .platform-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(255,255,255,0.15);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+  .p-icon { font-size: 32px; display: block; margin-bottom: 10px; }
+  .p-name { font-size: 13px; font-weight: 700; }
+  .p-count { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; margin-top: 4px; }
+
+  /* Features */
+  .features {
+    max-width: 900px;
+    margin: 0 auto 100px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    animation: fadeUp 0.8s 1.2s both;
+  }
+  .feature-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .feature-card::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 20px; right: 20px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .feature-card:hover::after { opacity: 1; }
+  .feature-card:hover { transform: translateY(-4px); border-color: rgba(0,229,255,0.2); }
+  .f-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(0,229,255,0.15), rgba(123,47,247,0.1));
+    border: 1px solid rgba(0,229,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+  .f-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+  .f-desc { font-size: 13px; color: var(--muted); line-height: 1.6; font-family: 'DM Mono', monospace; font-weight: 300; }
+
+  /* Footer */
+  footer {
+    position: relative; z-index: 5;
+    border-top: 1px solid var(--border);
+    padding: 40px 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .footer-copy { font-size: 13px; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .footer-links { display: flex; gap: 24px; }
+  .footer-links a { color: var(--muted); text-decoration: none; font-size: 12px; transition: color 0.2s; font-family: 'DM Mono', monospace; }
+  .footer-links a:hover { color: var(--accent); }
+
+  /* Floating particles */
+  .particles { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+  .particle {
+    position: absolute;
+    width: 2px; height: 2px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0;
+    animation: particleFloat linear infinite;
+  }
+
+  @keyframes particleFloat {
+    0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+    10% { opacity: 0.6; }
+    90% { opacity: 0.6; }
+    100% { transform: translateY(-100px) rotate(720deg); opacity: 0; }
+  }
+
+  /* Toast notification */
+  .toast {
+    position: fixed;
+    bottom: 30px; right: 30px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 1000;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
+    max-width: 300px;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast-icon { font-size: 18px; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    header { padding: 20px 24px; }
+    nav { display: none; }
+    .hero { padding: 60px 20px 40px; }
+    .platforms-grid { grid-template-columns: repeat(3, 1fr); }
+    .features { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: 1fr; }
+    footer { flex-direction: column; gap: 20px; padding: 30px 24px; }
+    .result-inner { flex-direction: column; }
+    .result-thumb { width: 100%; height: 160px; }
+  }
+
+  /* URL detection animation */
+  @keyframes detectPulse {
+    0% { box-shadow: 0 0 0 0 rgba(0,229,255,0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(0,229,255,0); }
+    100% { box-shadow: 0 0 0 0 rgba(0,229,255,0); }
+  }
+  .detected { animation: detectPulse 0.6s ease; }
+
+  .platform-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .platform-indicator.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="cursor" id="cursor"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+
+<div class="bg-canvas">
+  <div class="bg-orb"></div>
+  <div class="bg-orb"></div>
+  <div class="bg-orb"></div>
+</div>
+<div class="grid-overlay"></div>
+<div class="particles" id="particles"></div>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⬇</div>
+    Video<span>Vault</span>
+  </div>
+  <nav>
+    <a href="#features">Features</a>
+    <a href="#platforms">Platforms</a>
+    <a href="#">API</a>
+    <span class="nav-badge">FREE</span>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      No watermarks · No signup · 100% Free
+    </div>
+    <h1>
+      Download Any<br>
+      <span class="line2">Video Instantly</span>
+    </h1>
+    <p>Paste a URL from YouTube, TikTok, Instagram, Twitter, Facebook and more — get your file in seconds.</p>
+  </section>
+
+  <div class="input-container" id="inputContainer">
+    <div class="platform-tabs">
+      <button class="platform-tab yt active" onclick="selectTab(this,'yt')"><span class="icon">▶</span> YouTube</button>
+      <button class="platform-tab tt" onclick="selectTab(this,'tt')"><span class="icon">♪</span> TikTok</button>
+      <button class="platform-tab ig" onclick="selectTab(this,'ig')"><span class="icon">◈</span> Instagram</button>
+      <button class="platform-tab tw" onclick="selectTab(this,'tw')"><span class="icon">✦</span> Twitter</button>
+      <button class="platform-tab fb" onclick="selectTab(this,'fb')"><span class="icon">◉</span> Facebook</button>
+    </div>
+
+    <div class="search-box" id="searchBox">
+      <input
+        type="text"
+        class="url-input"
+        id="urlInput"
+        placeholder="Paste video URL here..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <span class="platform-indicator" id="platformIndicator"></span>
+      <button class="paste-btn" onclick="pasteUrl()">PASTE</button>
+      <button class="download-btn" id="downloadBtn" onclick="startDownload()">
+        <span class="btn-icon">⬇</span>
+        <span class="btn-text">FETCH</span>
+        <div class="btn-spinner"></div>
+      </button>
+    </div>
+
+    <div class="quality-row">
+      <span class="quality-label">Quality:</span>
+      <div class="quality-pills">
+        <button class="quality-pill" onclick="setQuality(this)">4K</button>
+        <button class="quality-pill active" onclick="setQuality(this)">1080p</button>
+        <button class="quality-pill" onclick="setQuality(this)">720p</button>
+        <button class="quality-pill" onclick="setQuality(this)">480p</button>
+        <button class="quality-pill" onclick="setQuality(this)">Audio</button>
+      </div>
+      <select class="format-select" id="formatSelect">
+        <option value="mp4">MP4</option>
+        <option value="webm">WebM</option>
+        <option value="mov">MOV</option>
+        <option value="mp3">MP3</option>
+        <option value="m4a">M4A</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar-outer">
+      <div class="progress-bar-inner" id="progressBar"></div>
+    </div>
+    <div class="progress-text">
+      <span id="progressStatus">Analyzing URL...</span>
+      <span id="progressPct">0%</span>
+    </div>
+  </div>
+
+  <div class="error-msg" id="errorMsg">
+    <span>⚠</span>
+    <span id="errorText">Please enter a valid video URL.</span>
+  </div>
+
+  <div class="result-card" id="resultCard">
+    <div class="result-inner">
+      <div class="result-thumb" id="resultThumb">
+        <div class="thumb-placeholder" id="thumbPlaceholder">🎬</div>
+        <img id="thumbImg" src="" alt="">
+      </div>
+      <div class="result-info">
+        <div class="result-title" id="resultTitle">Video Title</div>
+        <div class="result-meta" id="resultMeta">
+          <span>📺 <span id="metaDuration">—</span></span>
+          <span>👁 <span id="metaViews">—</span></span>
+          <span>📅 <span id="metaDate">—</span></span>
+          <span>🎵 <span id="metaAudio">—</span></span>
+        </div>
+        <div class="download-options" id="downloadOptions"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-item">
+      <div class="stat-num" id="stat1">0</div>
+      <div class="stat-label">Videos Downloaded</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">50+</div>
+      <div class="stat-label">Supported Sites</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">∞</div>
+      <div class="stat-label">Daily Downloads</div>
+    </div>
+  </div>
+
+  <section class="platforms-section" id="platforms">
+    <div class="section-label">Supported Platforms</div>
+    <div class="platforms-grid">
+      <div class="platform-card yt-card"><span class="p-icon">▶</span><div class="p-name">YouTube</div><div class="p-count">Any video</div></div>
+      <div class="platform-card tt-card"><span class="p-icon">♪</span><div class="p-name">TikTok</div><div class="p-count">No watermark</div></div>
+      <div class="platform-card ig-card"><span class="p-icon">◈</span><div class="p-name">Instagram</div><div class="p-count">Reels & Posts</div></div>
+      <div class="platform-card tw-card"><span class="p-icon">✦</span><div class="p-name">Twitter / X</div><div class="p-count">GIFs too</div></div>
+      <div class="platform-card fb-card"><span class="p-icon">◉</span><div class="p-name">Facebook</div><div class="p-count">Public videos</div></div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="feature-card">
+      <div class="f-icon">🚫</div>
+      <div class="f-title">Zero Watermarks</div>
+      <div class="f-desc">Download TikTok videos completely clean, no platform branding or logos attached.</div>
+    </div>
+    <div class="feature-card">
+      <div class="f-icon">⚡</div>
+      <div class="f-title">Lightning Fast</div>
+      <div class="f-desc">Our servers fetch and process videos in under 3 seconds using distributed CDN nodes.</div>
+    </div>
+    <div class="feature-card">
+      <div class="f-icon">🔒</div>
+      <div class="f-title">Private & Secure</div>
+      <div class="f-desc">No account needed. URLs aren't logged. Your downloads stay completely private.</div>
+    </div>
+    <div class="feature-card">
+      <div class="f-icon">🎯</div>
+      <div class="f-title">URL Detection</div>
+      <div class="f-desc">Auto-detects the platform the moment you paste. No manual selection needed.</div>
+    </div>
+    <div class="feature-card">
+      <div class="f-icon">🎬</div>
+      <div class="f-title">4K Quality</div>
+      <div class="f-desc">Download in full 4K, 1080p, 720p, or extract audio as MP3 or M4A.</div>
+    </div>
+    <div class="feature-card">
+      <div class="f-icon">♾</div>
+      <div class="f-title">Unlimited Use</div>
+      <div class="f-desc">No daily limits, no captchas, no subscriptions. Download as much as you want.</div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="footer-copy">© 2026 VideoVault — Free video downloader</div>
+  <div class="footer-links">
+    <a href="#">Privacy</a>
+    <a href="#">Terms</a>
+    <a href="#">DMCA</a>
+    <a href="#">Contact</a>
+  </div>
+</footer>
+
+<div class="toast" id="toast">
+  <span class="toast-icon" id="toastIcon">✓</span>
+  <span id="toastMsg">URL pasted!</span>
+</div>
+
+<script>
+// ==================== CURSOR ====================
+const cursor = document.getElementById('cursor');
+const ring = document.getElementById('cursorRing');
+let mx = 0, my = 0, rx = 0, ry = 0;
+
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  cursor.style.left = mx - 6 + 'px';
+  cursor.style.top = my - 6 + 'px';
+});
+
+function animRing() {
+  rx += (mx - rx - 18) * 0.12;
+  ry += (my - ry - 18) * 0.12;
+  ring.style.left = rx + 'px';
+  ring.style.top = ry + 'px';
+  requestAnimationFrame(animRing);
+}
+animRing();
+
+document.querySelectorAll('button, a, input, select, .platform-card').forEach(el => {
+  el.addEventListener('mouseenter', () => { cursor.classList.add('hover'); ring.classList.add('hover'); });
+  el.addEventListener('mouseleave', () => { cursor.classList.remove('hover'); ring.classList.remove('hover'); });
+});
+
+// ==================== PARTICLES ====================
+const pContainer = document.getElementById('particles');
+for (let i = 0; i < 18; i++) {
+  const p = document.createElement('div');
+  p.className = 'particle';
+  const x = Math.random() * 100;
+  const dur = 8 + Math.random() * 15;
+  const del = Math.random() * 15;
+  const size = Math.random() > 0.7 ? 3 : 2;
+  const colors = ['var(--accent)', 'var(--accent2)', 'var(--accent3)'];
+  p.style.cssText = `left:${x}%;width:${size}px;height:${size}px;background:${colors[Math.floor(Math.random()*3)]};animation-duration:${dur}s;animation-delay:-${del}s;`;
+  pContainer.appendChild(p);
+}
+
+// ==================== COUNTER ANIMATION ====================
+function animCount(el, end, suffix = '') {
+  let start = 0;
+  const step = end / 60;
+  const tick = () => {
+    start = Math.min(start + step, end);
+    el.textContent = Math.round(start).toLocaleString() + suffix;
+    if (start < end) requestAnimationFrame(tick);
+  };
+  tick();
+}
+setTimeout(() => {
+  animCount(document.getElementById('stat1'), 2847193, '+');
+}, 1200);
+
+// ==================== PLATFORM DETECTION ====================
+const platforms = {
+  youtube: { re: /youtu(be\.com|\.be)/i, label: '▶ YouTube', color: '#ff4444', tab: 'yt' },
+  tiktok: { re: /tiktok\.com/i, label: '♪ TikTok', color: '#00f2ea', tab: 'tt' },
+  instagram: { re: /instagram\.com/i, label: '◈ Instagram', color: '#e1306c', tab: 'ig' },
+  twitter: { re: /(twitter|x)\.com/i, label: '✦ Twitter/X', color: '#1da1f2', tab: 'tw' },
+  facebook: { re: /facebook\.com|fb\.watch/i, label: '◉ Facebook', color: '#4267B2', tab: 'fb' }
+};
+
+const indicator = document.getElementById('platformIndicator');
+const urlInput = document.getElementById('urlInput');
+
+function detectPlatform(url) {
+  for (const [name, data] of Object.entries(platforms)) {
+    if (data.re.test(url)) return { name, ...data };
+  }
+  return null;
+}
+
+urlInput.addEventListener('input', () => {
+  const url = urlInput.value.trim();
+  const det = detectPlatform(url);
+  if (det && url.length > 10) {
+    indicator.textContent = det.label;
+    indicator.style.background = det.color + '22';
+    indicator.style.border = `1px solid ${det.color}44`;
+    indicator.style.color = det.color;
+    indicator.classList.add('show');
+    // Auto-select tab
+    document.querySelectorAll('.platform-tab').forEach(t => t.classList.remove('active'));
+    const tab = document.querySelector(`.platform-tab.${det.tab}`);
+    if (tab) tab.classList.add('active');
+    // Pulse effect
+    document.getElementById('searchBox').classList.add('detected');
+    setTimeout(() => document.getElementById('searchBox').classList.remove('detected'), 600);
+  } else {
+    indicator.classList.remove('show');
+  }
+  hideError();
+  hideResult();
+});
+
+// ==================== TABS ====================
+function selectTab(el, type) {
+  document.querySelectorAll('.platform-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const placeholders = {
+    yt: 'https://youtube.com/watch?v=...',
+    tt: 'https://tiktok.com/@user/video/...',
+    ig: 'https://instagram.com/reel/...',
+    tw: 'https://twitter.com/user/status/...',
+    fb: 'https://facebook.com/watch/?v=...'
+  };
+  urlInput.placeholder = placeholders[type] || 'Paste video URL here...';
+  urlInput.focus();
+}
+
+// ==================== QUALITY & FORMAT ====================
+function setQuality(el) {
+  document.querySelectorAll('.quality-pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  const formatSel = document.getElementById('formatSelect');
+  if (el.textContent === 'Audio') {
+    formatSel.value = 'mp3';
+  } else if (formatSel.value === 'mp3' || formatSel.value === 'm4a') {
+    formatSel.value = 'mp4';
+  }
+}
+
+// ==================== PASTE ====================
+async function pasteUrl() {
+  try {
+    const text = await navigator.clipboard.readText();
+    urlInput.value = text;
+    urlInput.dispatchEvent(new Event('input'));
+    showToast('📋', 'URL pasted!');
+  } catch {
+    urlInput.focus();
+    showToast('⌨', 'Press Ctrl+V to paste');
+  }
+}
+
+// ==================== TOAST ====================
+function showToast(icon, msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastIcon').textContent = icon;
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ==================== ERRORS ====================
+function showError(msg) {
+  const e = document.getElementById('errorMsg');
+  document.getElementById('errorText').textContent = msg;
+  e.classList.add('show');
+}
+function hideError() {
+  document.getElementById('errorMsg').classList.remove('show');
+}
+function hideResult() {
+  document.getElementById('resultCard').classList.remove('show');
+  document.getElementById('progressWrap').classList.remove('show');
+}
+
+// ==================== COBALT API INTEGRATION ====================
+// Uses cobalt.tools open API — free, no key needed, no watermarks
+const COBALT_API = 'https://cobalt.tools/api/json';
+
+// Quality map for cobalt vQuality param
+const qualityMap = { '4K': '2160', '1080p': '1080', '720p': '720', '480p': '480', '360p': '360' };
+
+let isProcessing = false;
+
+async function callCobalt(videoUrl, vQuality = '1080', isAudioOnly = false, audioFormat = 'mp3') {
+  const body = {
+    url: videoUrl,
+    vQuality,
+    isAudioOnly,
+    aFormat: audioFormat,
+    filenamePattern: 'pretty',
+    isNoTTWatermark: true,      // TikTok no watermark
+    isTTFullAudio: false,
+    isAudioMuted: false,
+    dubLang: false,
+    disableMetadata: false
+  };
+
+  const res = await fetch(COBALT_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  return await res.json();
+}
+
+// Trigger a real browser download from a URL
+function triggerDownload(href, filename) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename || 'video';
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => a.remove(), 500);
+}
+
+// ==================== MAIN DOWNLOAD ====================
+async function startDownload() {
+  if (isProcessing) return;
+  const url = urlInput.value.trim();
+
+  if (!url) { showError('Please enter a video URL.'); return; }
+  if (!/^https?:\/\/.+/i.test(url)) { showError('Please enter a valid URL starting with https://'); return; }
+
+  const det = detectPlatform(url);
+  if (!det) { showError('Platform not recognised. Supported: YouTube, TikTok, Instagram, Twitter/X, Facebook.'); return; }
+
+  hideError();
+  hideResult();
+  isProcessing = true;
+
+  const btn = document.getElementById('downloadBtn');
+  btn.classList.add('loading');
+
+  const progressWrap = document.getElementById('progressWrap');
+  const progressBar  = document.getElementById('progressBar');
+  const progressStatus = document.getElementById('progressStatus');
+  const progressPct    = document.getElementById('progressPct');
+  progressWrap.classList.add('show');
+
+  // Animated progress while we wait for the API
+  const fakeSteps = [
+    { pct: 12, label: 'Resolving URL...' },
+    { pct: 30, label: 'Contacting server...' },
+    { pct: 55, label: 'Fetching video metadata...' },
+    { pct: 75, label: 'Processing streams...' },
+  ];
+  for (const s of fakeSteps) {
+    await delay(280 + Math.random() * 200);
+    progressBar.style.width = s.pct + '%';
+    progressStatus.textContent = s.label;
+    progressPct.textContent = s.pct + '%';
+  }
+
+  // Get selected quality
+  const activeQPill = document.querySelector('.quality-pill.active');
+  const selectedQ   = activeQPill ? activeQPill.textContent.trim() : '1080p';
+  const isAudio     = selectedQ === 'Audio';
+  const vQ          = qualityMap[selectedQ] || '1080';
+  const fmt         = document.getElementById('formatSelect').value;
+
+  let cobaltResult = null;
+  try {
+    cobaltResult = await callCobalt(url, vQ, isAudio, isAudio ? (fmt === 'mp4' ? 'mp3' : fmt) : 'mp3');
+  } catch (err) {
+    progressWrap.classList.remove('show');
+    btn.classList.remove('loading');
+    isProcessing = false;
+    showError('Could not reach the download server. Check your connection and try again.');
+    return;
+  }
+
+  progressBar.style.width = '90%';
+  progressStatus.textContent = 'Preparing links...';
+  progressPct.textContent = '90%';
+  await delay(300);
+
+  // Handle cobalt response statuses
+  // status: "stream" | "redirect" | "picker" | "error" | "rate-limit"
+  if (!cobaltResult || cobaltResult.status === 'error' || cobaltResult.status === 'rate-limit') {
+    progressWrap.classList.remove('show');
+    btn.classList.remove('loading');
+    isProcessing = false;
+    const msg = cobaltResult?.text || 'This video could not be fetched. It may be private, age-restricted, or region-locked.';
+    showError(msg);
+    return;
+  }
+
+  progressBar.style.width = '100%';
+  progressStatus.textContent = 'Ready!';
+  progressPct.textContent = '100%';
+  await delay(350);
+
+  // Build result UI
+  // Cobalt returns: { status, url, picker (array), filename, audio }
+  const dlOpts = document.getElementById('downloadOptions');
+  dlOpts.innerHTML = '';
+
+  const platformEmoji = { youtube:'▶', tiktok:'♪', instagram:'◈', twitter:'✦', facebook:'◉' };
+  const thumb = platformEmoji[det.name] || '🎬';
+  document.getElementById('thumbPlaceholder').textContent = thumb;
+  document.getElementById('resultTitle').textContent = cobaltResult.filename
+    ? cobaltResult.filename.replace(/\.[^.]+$/, '').replace(/_/g, ' ')
+    : `${det.label} Video`;
+  document.getElementById('metaDuration').textContent = '—';
+  document.getElementById('metaViews').textContent = det.label;
+  document.getElementById('metaDate').textContent = 'Live';
+  document.getElementById('metaAudio').textContent = isAudio ? fmt.toUpperCase() : 'Included';
+
+  if (cobaltResult.status === 'picker' && Array.isArray(cobaltResult.picker)) {
+    // Multiple streams (e.g. Instagram carousel, Twitter multi-video)
+    cobaltResult.picker.forEach((item, i) => {
+      const a = document.createElement('a');
+      a.className = 'dl-option';
+      a.href = item.url;
+      const ext = item.type === 'photo' ? 'jpg' : (fmt || 'mp4');
+      const fname = `video_${i + 1}.${ext}`;
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        triggerDownload(item.url, fname);
+        showToast('⬇', `Downloading file ${i + 1}...`);
+      });
+      a.innerHTML = `⬇ <span>${item.type === 'photo' ? 'Image' : 'Video'} ${i + 1}</span>`;
+      dlOpts.appendChild(a);
+    });
+  } else {
+    // Single stream or redirect
+    const videoUrl  = cobaltResult.url;
+    const audioUrl  = cobaltResult.audio;
+    const filename  = cobaltResult.filename || `video.${isAudio ? (fmt || 'mp3') : (fmt || 'mp4')}`;
+
+    if (videoUrl) {
+      const a = document.createElement('a');
+      a.className = 'dl-option';
+      a.href = videoUrl;
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        triggerDownload(videoUrl, filename);
+        showToast('⬇', 'Download started!');
+      });
+      a.innerHTML = `⬇ <span>${isAudio ? 'Audio' : 'Video'}</span><span class="res">${isAudio ? fmt.toUpperCase() : selectedQ}</span>`;
+      dlOpts.appendChild(a);
+    }
+
+    // Also offer audio separately if available and not already audio mode
+    if (audioUrl && !isAudio) {
+      const b = document.createElement('a');
+      b.className = 'dl-option';
+      b.href = audioUrl;
+      b.addEventListener('click', e => {
+        e.preventDefault();
+        const af = filename.replace(/\.[^.]+$/, '.mp3');
+        triggerDownload(audioUrl, af);
+        showToast('🎵', 'Audio download started!');
+      });
+      b.innerHTML = `⬇ <span>Audio only</span><span class="res">MP3</span>`;
+      dlOpts.appendChild(b);
+    }
+
+    // Fallback: open in new tab button
+    if (videoUrl || audioUrl) {
+      const c = document.createElement('a');
+      c.className = 'dl-option';
+      c.href = videoUrl || audioUrl;
+      c.target = '_blank';
+      c.rel = 'noopener';
+      c.innerHTML = `↗ <span>Open in tab</span>`;
+      dlOpts.appendChild(c);
+    }
+  }
+
+  progressWrap.classList.remove('show');
+  document.getElementById('resultCard').classList.add('show');
+  btn.classList.remove('loading');
+  isProcessing = false;
+  showToast('✓', 'Ready to download!');
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ==================== KEYBOARD SHORTCUT ====================
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.activeElement === urlInput) {
+    startDownload();
+  }
+});
+
+// ==================== URL INPUT ANIMATION ====================
+urlInput.addEventListener('paste', () => {
+  setTimeout(() => {
+    urlInput.dispatchEvent(new Event('input'));
+    showToast('📋', 'URL detected!');
+  }, 50);
+});
+
+// ==================== SCROLL REVEAL ====================
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.style.animation = 'fadeUp 0.6s ease forwards';
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.platform-card, .feature-card').forEach(el => {
+  el.style.opacity = '0';
+  observer.observe(el);
+});
+</script>
+</body>
+</html>
